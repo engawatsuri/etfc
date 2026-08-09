@@ -2,14 +2,24 @@ use std::*;
 
 fn main() -> process::ExitCode {
     let mut args: Vec<String> = env::args().collect();
-    let mut req_args: Vec<String> = Vec::new();
+    let mut stdin_fmt = String::new();
+    let mut stdout_fmt = String::new();
     let mut ops: Vec<String> = Vec::new();
+
+    // divide args into stdin_fmt and stdout_fmt and ops
+    let mut op_can_exist = true;
+    let mut req_arg_count = 0;
     for i in 0..args.len() {
-        if args[i].starts_with("--") {
-            ops.push(args[i][2..].to_string());
-        } else if args[i].starts_with("-") {
-            if args[i].len() == 1 {
+        if op_can_exist && args[i].starts_with("--") {
+            if args[i].len() < 3 {
+                op_can_exist = false;
                 continue;
+            }
+            ops.push(args[i][2..].to_string());
+        } op_can_exist && else if args[i].starts_with("-") {
+            if args[i].len() < 2 {
+                eprintln!("error: miss the option");
+                return process::ExitCode::FAILURE;
             }
             for c in args[i][1..] {
                 let op = match c {
@@ -23,13 +33,31 @@ fn main() -> process::ExitCode {
                 ops.push(op.to_string());
             }
         } else {
-            req_args.push(args[i].clone());
+            match req_arg_count {
+                0 => {
+                    stdin_fmt = args[i].clone();
+                }
+                1 => {
+                    stdout_fmt = args[i].clone();
+                }
+                _ => {
+                    eprintln("error: too many argument");
+                    return process::ExitCode::FAILURE;
+                }
+            }
+            req_arg_count += 1;
         }
     }
+    if req_arg_count < 2 {
+        eprintln!("error: no found input or output format");
+        return process::ExitCode::FAILURE;
+    }
+
+    // option process
     for i in 0..ops.len() {
         match ops[i] {
             "help" => {
-                println!("Usage: etfc [OPTION]... <stdin_format> <stdout_format>");
+                println!("Usage: etfc [OPTION]... STDIN_FORMAT STDOUT_FORMAT 0< INPUT_FILE 1> OUTPUT_FILE");
                 println!("");
                 println!("Converter the FILE");
                 println!("");
@@ -44,13 +72,10 @@ fn main() -> process::ExitCode {
             }
             _ => {
                 eprintln("error: {}: no found option", ops[i]);
-                return process::ExitCode::SUCCESS;
+                return process::ExitCode::FAILURE;
             }
         }
     }
-    if req_args.len() < 2 {
-        eprintln!("error: no found input or output format");
-        return process::ExitCode::FAILURE;
-    }
+
     process::ExitCode::SUCCESS
 }
