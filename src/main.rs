@@ -1,15 +1,15 @@
 mod public;
 use std::*;
 
-static CONTERTER: sync::LazyLock<collections::HashMap<&'static str, collections::HashMap<&'static str, fn() -> process::ExitCode>>> = sync::LazyLock::new(|| {
+static CONVERTER: sync::LazyLock<collections::HashMap<&'static str, collections::HashMap<&'static str, fn() -> process::ExitCode>>> = sync::LazyLock::new(|| {
     let mut map: collections::HashMap<&'static str, collections::HashMap<&'static str, fn() -> process::ExitCode>> = collections::HashMap::new();
-    map.insert("public.utf8-plain-text", public::FROM_UTF8_PLAIN_TEXT);
+    map.insert("public.utf8-plain-text", (*public::utf8_plain_text::FROM).clone());
     map
 });
 
 /// analyze argument and run converting function
 fn main() -> process::ExitCode {
-    let mut args: Vec<String> = env::args().collect();
+    let args: Vec<String> = env::args().collect();
     /*
      * length have to be 2
      * [0]: redirected stdin format
@@ -21,24 +21,24 @@ fn main() -> process::ExitCode {
     // divide args into stdin_fmt and stdout_fmt and ops
     let mut op_can_exist = true;
     let mut req_arg_count = 0;
-    for arg in args {
+    for arg in &args[1..] {
         if op_can_exist && arg.starts_with("--") {
             if arg.len() < 3 {
                 op_can_exist = false;
                 continue;
             }
             ops.push(arg[2..].to_string());
-        } op_can_exist && else if arg.starts_with("-") {
+        } else if op_can_exist && arg.starts_with("-") {
             if arg.len() < 2 {
                 eprintln!("error: miss the option");
                 return process::ExitCode::FAILURE;
             }
-            for c in arg[1..] {
+            for c in arg.chars() {
                 let op = match c {
-                    "h" => "help",
-                    "v" => "version",
+                    'h' => "help",
+                    'v' => "version",
                     _ => {
-                        eprintln("error: {}: no found shortened option", c);
+                        eprintln!("error: {}: no found shortened option", c);
                         return process::ExitCode::FAILURE;
                     }
                 };
@@ -50,7 +50,7 @@ fn main() -> process::ExitCode {
                     req_args.push(arg.clone());
                 }
                 _ => {
-                    eprintln("error: too many argument");
+                    eprintln!("error: too many argument");
                     return process::ExitCode::FAILURE;
                 }
             }
@@ -64,7 +64,7 @@ fn main() -> process::ExitCode {
 
     // option process
     for i in 0..ops.len() {
-        match ops[i] {
+        match ops[i].as_str() {
             "help" => {
                 println!("Usage: etfc [OPTION]... STDIN_FORMAT STDOUT_FORMAT 0< INPUT_FILE 1> OUTPUT_FILE");
                 println!("");
@@ -80,7 +80,7 @@ fn main() -> process::ExitCode {
                 return process::ExitCode::SUCCESS;
             }
             _ => {
-                eprintln("error: {}: no found option", ops[i]);
+                eprintln!("error: {}: no found option", ops[i]);
                 return process::ExitCode::FAILURE;
             }
         }
@@ -92,22 +92,22 @@ fn main() -> process::ExitCode {
             "public.text" => "public.utf8-plain-text",
             "public.plain-text" => "public.utf8-plain-text",
             _ => continue,
-        }
+        };
         *req_arg = origin_fmt.to_string();
     }
 
     // run converting function
-    let from = CONVERTER.get(&req_args[0]) else {
+    let Some(from) = CONVERTER.get(req_args[0].as_str()) else {
         eprintln!("error: {}: this format isn't supported", req_args[0]);
         return process::ExitCode::FAILURE;
     };
-    let converter = from.get(&req_args[1]) else {
+    let Some(converter) = from.get(req_args[1].as_str()) else {
         eprintln!("error: {}: this format isn't supported", req_args[0]);
         return process::ExitCode::FAILURE;
     };
     let result = converter();
     if result == process::ExitCode::SUCCESS {
-        eprintln("converted");
+        eprintln!("converted");
     }
     result
 }
