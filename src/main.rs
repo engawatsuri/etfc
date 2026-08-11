@@ -1,27 +1,39 @@
+mod public;
 use std::*;
 
+static CONTERTER: sync::LazyLock<collections::HashMap<&'static str, collections::HashMap<&'static str, fn() -> process::ExitCode>>> = sync::LazyLock::new(|| {
+    let mut map: collections::HashMap<&'static str, collections::HashMap<&'static str, fn() -> process::ExitCode>> = collections::HashMap::new();
+    map.insert("public.utf8-plain-text", public::FROM_UTF8_PLAIN_TEXT);
+    map
+});
+
+/// analyze argument and run converting function
 fn main() -> process::ExitCode {
     let mut args: Vec<String> = env::args().collect();
-    let mut stdin_fmt = String::new();
-    let mut stdout_fmt = String::new();
+    /*
+     * length have to be 2
+     * [0]: redirected stdin format
+     * [1]: redirected stdout format
+     */
+    let mut req_args: Vec<String> = Vec::new();
     let mut ops: Vec<String> = Vec::new();
 
     // divide args into stdin_fmt and stdout_fmt and ops
     let mut op_can_exist = true;
     let mut req_arg_count = 0;
-    for i in 0..args.len() {
-        if op_can_exist && args[i].starts_with("--") {
-            if args[i].len() < 3 {
+    for arg in args {
+        if op_can_exist && arg.starts_with("--") {
+            if arg.len() < 3 {
                 op_can_exist = false;
                 continue;
             }
-            ops.push(args[i][2..].to_string());
-        } op_can_exist && else if args[i].starts_with("-") {
-            if args[i].len() < 2 {
+            ops.push(arg[2..].to_string());
+        } op_can_exist && else if arg.starts_with("-") {
+            if arg.len() < 2 {
                 eprintln!("error: miss the option");
                 return process::ExitCode::FAILURE;
             }
-            for c in args[i][1..] {
+            for c in arg[1..] {
                 let op = match c {
                     "h" => "help",
                     "v" => "version",
@@ -34,11 +46,8 @@ fn main() -> process::ExitCode {
             }
         } else {
             match req_arg_count {
-                0 => {
-                    stdin_fmt = args[i].clone();
-                }
-                1 => {
-                    stdout_fmt = args[i].clone();
+                0 | 1 => {
+                    req_args.push(arg.clone());
                 }
                 _ => {
                     eprintln("error: too many argument");
@@ -48,7 +57,7 @@ fn main() -> process::ExitCode {
             req_arg_count += 1;
         }
     }
-    if req_arg_count < 2 {
+    if req_args.len() < 2 {
         eprintln!("error: no found input or output format");
         return process::ExitCode::FAILURE;
     }
@@ -77,5 +86,28 @@ fn main() -> process::ExitCode {
         }
     }
 
-    process::ExitCode::SUCCESS
+    // change short format to origin format
+    for req_arg in &mut req_args {
+        let origin_fmt = match req_arg.as_str() {
+            "public.text" => "public.utf8-plain-text",
+            "public.plain-text" => "public.utf8-plain-text",
+            _ => continue,
+        }
+        *req_arg = origin_fmt.to_string();
+    }
+
+    // run converting function
+    let from = CONVERTER.get(&req_args[0]) else {
+        eprintln!("error: {}: this format isn't supported", req_args[0]);
+        return process::ExitCode::FAILURE;
+    };
+    let converter = from.get(&req_args[1]) else {
+        eprintln!("error: {}: this format isn't supported", req_args[0]);
+        return process::ExitCode::FAILURE;
+    };
+    let result = converter();
+    if result == process::ExitCode::SUCCESS {
+        eprintln("converted");
+    }
+    result
 }
