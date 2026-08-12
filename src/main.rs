@@ -3,6 +3,8 @@ use std::*;
 
 static CONVERTER: sync::LazyLock<collections::HashMap<&'static str, collections::HashMap<&'static str, fn() -> process::ExitCode>>> = sync::LazyLock::new(|| {
     let mut map: collections::HashMap<&'static str, collections::HashMap<&'static str, fn() -> process::ExitCode>> = collections::HashMap::new();
+    map.insert("public.utf16-external-plain-text", (*public::utf16_external_plain_text::FROM).clone());
+    map.insert("public.utf16-plain-text", (*public::utf16_plain_text::FROM).clone());
     map.insert("public.utf8-plain-text", (*public::utf8_plain_text::FROM).clone());
     map
 });
